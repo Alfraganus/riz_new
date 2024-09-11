@@ -1,0 +1,88 @@
+- name: Deploy to DEV
+  hosts: devserver
+
+  vars:
+    local_app_path: ./
+    deployment_user_group: 'www-data'
+    app_release_version: 1.0.000
+    app_path: /var/www/avlomuslim/backend
+    app_current_path: '{{ app_path }}/current'
+    app_releases_path: '{{ app_path }}/releases'
+    app_shared_path: '{{ app_path }}/shared'
+    app_releases_version_path: '{{ app_releases_path }}/{{ app_release_version }}.{{ timestamp }}'
+
+  tasks:
+  - name: Getting current timestamp
+    shell: date +%Y%m%d%H%M%S
+    register: timestamp_raw
+
+  - name: Set fact with current timestamp to use it in release directory name
+    set_fact: timestamp={{ timestamp_raw.stdout }}
+
+  - name: Create application directories structure
+    with_items:
+      - "{{ app_path }}"
+      - "{{ app_releases_path }}"
+      - "{{ app_shared_path }}"
+      - "{{ app_shared_path }}/storage"
+    file:
+      path: "{{ item }}"
+      state: directory
+      mode: 0774
+      group: "{{ deployment_user_group }}"
+
+  - name: Create application shared/storage sub directories
+    with_items:
+      - framework/cache
+      - framework/sessions
+      - framework/views
+      - logs
+      - app/public
+    file:
+      path: "{{ app_shared_path }}/storage/{{ item }}"
+      state: directory
+      mode: 0774
+      group: "{{ deployment_user_group }}"
+
+  - name: Deploy application code with rsync
+    synchronize:
+      src: "{{ local_app_path }}"
+      dest: "{{ app_releases_version_path }}"
+
+  - name: Symlink shared storage to release storage
+    file:
+      src: "{{ app_shared_path }}/storage"
+      dest: "{{ app_releases_version_path }}/storage"
+      state: link
+
+  - name: Symlink shared storage/app/public to release public/storage
+    file:
+      src: "{{ app_shared_path }}/storage/app/public"
+      dest: "{{ app_releases_version_path }}/public/storage"
+      state: link
+
+  - name: Copy environment file
+    shell: cp {{ app_path }}/.env {{ app_releases_version_path }}/.env
+
+  - name: Install composer dependencies
+    shell: "composer install --optimize-autoloader"
+    args:
+      chdir: "{{ app_releases_version_path }}"
+
+  - name: Laravel generating app key, migrations
+    shell: "php artisan {{ item }}"
+    with_items:
+      - "key:generate --force"
+      - "migrate --force"
+      - "l5-swagger:generate"
+    args:
+      chdir: "{{ app_releases_version_path }}"
+
+  - name: Symlink releases/VERSION to current
+    file:
+      src: "{{ app_releases_version_path }}"
+      dest: "{{ app_current_path }}"
+      state: link
+
+  - name: Restart PHP-FPM
+    shell: sudo /usr/bin/systemctl restart php8.2-fpm.service
