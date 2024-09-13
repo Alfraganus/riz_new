@@ -2,6 +2,7 @@
 
 namespace App\Modules\openAi\controllers;
 
+use App\Modules\openAi\service\GlensService;
 use App\Modules\openAi\service\OpenAiImageChatService;
 use App\Modules\openAi\service\OpenAiRandomPickService;
 use App\Modules\openAi\service\OpenAiTextChatService;
@@ -12,14 +13,16 @@ class OpenAIController extends BaseController
 {
 
     public function __construct(
-        OpenAiImageChatService   $openAiService,
-        OpenAiTextChatService    $aiTextChatService,
-        OpenAiRandomPickService  $openAiRandomPickService
+        OpenAiImageChatService  $openAiService,
+        OpenAiTextChatService   $aiTextChatService,
+        OpenAiRandomPickService $openAiRandomPickService,
+        GlensService            $glensService
     )
     {
         $this->openAiService = $openAiService;
         $this->aiTextChatService = $aiTextChatService;
         $this->openAiRandomPickService = $openAiRandomPickService;
+        $this->glensService = $glensService;
     }
 
     public function gptAdviceFromImage(Request $request)
@@ -35,5 +38,10 @@ class OpenAIController extends BaseController
     public function gptRandomPick(Request $request)
     {
         return $this->openAiRandomPickService->sendRandomPickGPT($request);
+    }
+
+    public function gptGlens(Request $request)
+    {
+        return $this->glensService->recognizeImage($request);
     }
 }
