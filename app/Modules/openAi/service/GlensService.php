@@ -1,10 +1,11 @@
 <?php
-
 namespace App\Modules\openAi\service;
 
 use App\Modules\lens\service\GoogleLensService;
 use GuzzleHttp\Client;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\File;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 
 class GlensService extends OpenAiService
@@ -39,11 +40,12 @@ class GlensService extends OpenAiService
             'description' => null,
             'facts' => [],
         ];
-        $keyword_gpt = $this->imageMessage($imageUrl);
+
+        $keyword_gpt = $this->imageMessage($request);
 
         /*google lens*/
         $client = new Client();
-        $response = $client->request('GET', GoogleLensService::SERP_API, [
+        $openAI = $client->request('GET', GoogleLensService::SERP_API, [
             'query' => [
                 'engine' => 'google_lens',
                 'url' => $imageUrl,
@@ -51,8 +53,9 @@ class GlensService extends OpenAiService
             ]
         ]);
 
-        $result = json_decode($response->getBody(), true);
+        $result = json_decode($openAI->getBody(), true);
         $keywords = [];
+
         foreach ($result['visual_matches'] as $search_result) {
             $response['web_sources'][] = [
                 'title' => $search_result['title'],
@@ -66,41 +69,33 @@ class GlensService extends OpenAiService
 
             $response['similar_images'][] = $search_result['thumbnail'];
             $words = explode(' ', $search_result['title']);
-            if ($words) {
-                foreach ($words as $word) {
-                    if (mb_strlen($word) >= 3 && !in_array(mb_strtolower($word), ['the', 'and', 'aboard', 'about', 'above', 'abreast', 'absent', 'across', 'after', 'against', 'aloft', 'along', 'alongside', 'amid', 'amidst', 'mid', 'midst', 'among', 'amongst', 'anti', 'apropos', 'around', 'round', 'aslant', 'astride', 'ontop', 'barring', 'before', 'behind', 'below', 'beneath', 'neath', 'beside', 'besides', 'between', 'beyond', 'but', 'come', 'concerning', 'contra', 'counting', 'cum', 'despite', 'down', 'during', 'ere', 'except', 'excepting', 'excluding', 'failing', 'following', 'for', 'from', 'including', 'inside', 'into', 'less', 'like', 'minus', 'modulo', 'modВ ', 'near', 'nearerВ ', 'nearestВ ', 'next', 'of', 'off', 'offshore', 'in', 'at', 'a', 'on', 'onto', 'opposite', 'out', 'outside', 'over', 'pace', 'past', 'pending', 'per', 'plus', 'post', 'pre', 'pro', 'qua', 're', 'regarding', 'respecting', 'sans', 'save', 'saving', 'since', 'sub', 'than', 'through', 'thruВ ', 'throughout', 'thruoutВ ', 'till', 'times', 'to', 'toward', 'towards', 'under', 'underneath', 'unlike', 'until', 'untoВ ', 'up', 'upon', 'versus', 'vs.В ', 'via', 'wanting', 'with', 'within', 'without', 'w/oВ ', 'worth', 'abroad', 'adrift', 'aft', 'afterward', 'afterwards', 'ahead', 'apart', 'ashore', 'aside', 'away', 'back', 'backward', 'backwards', 'beforehand', 'downhill', 'downstage', 'downstairs', 'downstream', 'downwards', 'downwind', 'east', 'eastwards', 'forward', 'heavenward', 'hence', 'henceforth', 'here', 'hereby', 'herein', 'hereof', 'hereto', 'herewith', 'homeward', 'indoors', 'inward', 'leftward', 'north', 'northeast', 'northward', 'northwest', 'now', 'onward', 'outdoors', 'outward', 'overboard', 'overhead', 'overland', 'overseas', 'rightward', 'seaward', 'skyward', 'south', 'southeast', 'southward', 'southwest', 'then', 'thence', 'thenceforth', 'there', 'thereby', 'therein', 'thereof', 'thereto', 'therewith', 'together', 'underfoot', 'underground', 'uphill', 'upstage', 'upstairs', 'upstream', 'upward', 'upwind', 'west', 'westward', 'when', 'whence', 'where', 'whereby', 'wherein', 'whereto', 'wherewith', 'after', 'although', 'as', 'because', 'before', 'beside', 'besides', 'between', 'by', 'considering', 'despite', 'except', 'for', 'from', 'given', 'granted', 'ifВ ', 'into', 'lest', 'like', 'notwithstanding', 'now', 'of', 'on', 'once', 'provided', 'providing', 'save', 'seeing', 'since', 'so', 'supposing', 'than', 'though', 'till', 'to', 'unless', 'until', 'upon', 'when', 'whenever', 'where', 'whereas', 'wherever', 'while', 'whilst', 'with', 'without', 'ago', 'apart', 'aside', 'aslant', 'away', 'hence', 'notwithstanding', 'on', 'over', 'shortВ ', 'throughВ ', 'according', 'across', 'ahead', 'along', 'apart', 'instead', 'near', 'opposite'])) {
-                        if (isset($keywords[$word])) {
-                            $keywords[$word] += 1;
-                        } else {
-                            $keywords[$word] = 1;
-                        }
+            foreach ($words as $word) {
+                if (mb_strlen($word) >= 3 && !in_array(mb_strtolower($word), ['the', 'and', 'aboard', 'about', 'above', 'abreast', 'absent', 'across', 'after', 'against', 'aloft', 'along', 'alongside', 'amid', 'amidst', 'mid', 'midst', 'among', 'amongst', 'anti', 'apropos', 'around', 'round', 'aslant', 'astride', 'ontop', 'barring', 'before', 'behind', 'below', 'beneath', 'neath', 'beside', 'besides', 'between', 'beyond', 'but', 'come', 'concerning', 'contra', 'counting', 'cum', 'despite', 'down', 'during', 'ere', 'except', 'excepting', 'excluding', 'failing', 'following', 'for', 'from', 'including', 'inside', 'into', 'less', 'like', 'minus', 'modulo', 'modВ ', 'near', 'nearerВ ', 'nearestВ ', 'next', 'of', 'off', 'offshore', 'in', 'at', 'a', 'on', 'onto', 'opposite', 'out', 'outside', 'over', 'pace', 'past', 'pending', 'per', 'plus', 'post', 'pre', 'pro', 'qua', 're', 'regarding', 'respecting', 'sans', 'save', 'saving', 'since', 'sub', 'than', 'through', 'thruВ ', 'throughout', 'thruoutВ ', 'till', 'times', 'to', 'toward', 'towards', 'under', 'underneath', 'unlike', 'until', 'untoВ ', 'up', 'upon', 'versus', 'vs.В ', 'via', 'wanting', 'with', 'within', 'without', 'w/oВ ', 'worth', 'abroad', 'adrift', 'aft', 'afterward', 'afterwards', 'ahead', 'apart', 'ashore', 'aside', 'away', 'back', 'backward', 'backwards', 'beforehand', 'downhill', 'downstage', 'downstairs', 'downstream', 'downwards', 'downwind', 'east', 'eastwards', 'forward', 'heavenward', 'hence', 'henceforth', 'here', 'hereby', 'herein', 'hereof', 'hereto', 'herewith', 'homeward', 'indoors', 'inward', 'leftward', 'north', 'northeast', 'northward', 'northwest', 'now', 'onward', 'outdoors', 'outward', 'overboard', 'overhead', 'overland', 'overseas', 'rightward', 'seaward', 'skyward', 'south', 'southeast', 'southward', 'southwest', 'then', 'thence', 'thenceforth', 'there', 'thereby', 'therein', 'thereof', 'thereto', 'therewith', 'together', 'underfoot', 'underground', 'uphill', 'upstage', 'upstairs', 'upstream', 'upward', 'upwind', 'west', 'westward', 'when', 'whence', 'where', 'whereby', 'wherein', 'whereto', 'wherewith', 'after', 'although', 'as', 'because', 'before', 'beside', 'besides', 'between', 'by', 'considering', 'despite', 'except', 'for', 'from', 'given', 'granted', 'ifВ ', 'into', 'lest', 'like', 'notwithstanding', 'now', 'of', 'on', 'once', 'provided', 'providing', 'save', 'seeing', 'since', 'so', 'supposing', 'than', 'though', 'till', 'to', 'unless', 'until', 'upon', 'when', 'whenever', 'where', 'whereas', 'wherever', 'while', 'whilst', 'with', 'without', 'ago', 'apart', 'aside', 'aslant', 'away', 'hence', 'notwithstanding', 'on', 'over', 'shortВ ', 'throughВ ', 'according', 'across', 'ahead', 'along', 'apart', 'instead', 'near', 'opposite'])) {
+                    if (isset($keywords[$word])) {
+                        $keywords[$word] += 1;
+                    } else {
+                        $keywords[$word] = 1;
                     }
                 }
-                arsort($keywords);
             }
-
         }
-
+        arsort($keywords);
         if (count($keywords) >= 3) {
             $response['tags'] = array_slice(array_keys($keywords), 0, 3);
         } else {
             $response['tags'] = array_keys($keywords);
         }
-        if ($keyword_gpt || count($response['tags']) >= 3) {
+
+        if (count($response['tags']) >= 3) {
 
             $label = $keyword_gpt ?? key($keywords); //join(', ', array_slice($response['tags'],0,3));
-
-
-            if ($keyword_gpt) {
-
-                $label1 = $label;
-                if ($lang != 'en') {
-                    $label1 = $this->chatMessage('translate to ' . $languages[$lang] . ' language if its in ' . $languages[$lang] . ': ' . $label . '');
-                }
-
-                $response['labels'] = [$label1]; // $message;
-                $response['tags'] = [$label1]; // $message;
-            } else {
+            $label1 = $label;
+            if ($lang != 'en') {
+                $label1 = $this->chatMessage('translate to ' . $languages[$lang] . ' language if its in ' . $languages[$lang] . ': ' . $label . '');
+            }
+            $response['labels'] = [$label1]; // $message;
+//                $response['tags'] = [$label1]; // $message;
+            if (!$keyword_gpt) {
                 $response['labels'][] = $label;
             }
 
@@ -123,25 +118,34 @@ class GlensService extends OpenAiService
     }
 
 
-
-    public function imageMessage($image)
+    public function imageMessage($request)
     {
-        $open_ai_key = env('OPENAI_API_KEY');
+        $apiKey = getenv('OPEN_AI_KEY');
+        $file = $request->file('image');
+        $filename = Str::random(40) . '.' . $file->getClientOriginalExtension(); // Generate a random filename
+        $imagePath = $file->storeAs('images', $filename, 'public');
+        $imageFullPath = storage_path('app/public/' . $imagePath);
+        if (!File::exists($imageFullPath)) {
+            return response()->json(['error' => 'Failed to save the uploaded image'], 500);
+        }
+        $imageUrl = asset('storage/' . $imagePath);
 
-        $client = new Client();
-        $response = $client->post(self::GPT4_URL, [
-            'headers' => [
-                'Authorization' => "Bearer {$open_ai_key}",
-                'Content-Type' => 'application/json',
-            ],
-            'json' => [
-                'model' => 'gpt-4o-mini',
-                'messages' => [
-                    "role" => "user",
-                    "content" => [
+        $openAI = new Client();
+        try {
+            $response = $openAI->post(self::GPT4_URL, [
+                'headers' => [
+                    'Authorization' => "Bearer {$apiKey}",
+                    'Content-Type' => 'application/json',
+                ],
+                'json' => [
+                    'model' => 'gpt-4o-mini',
+                    'messages' => [
                         [
-                            "type" => "text",
-                            "text" => "You are an advanced assistant for recognizing objects in photos. you recognize the main object in the photo and write what it is.
+                            'role' => 'user',
+                            'content' => [
+                                [
+                                    "type" => "text",
+                                    "text" => "You are an advanced assistant for recognizing objects in photos. you recognize the main object in the photo and write what it is.
 you can recognize absolutely any object. Below are detailed exceptions:
 If you recognize the car, indicate its brand and model. If you cannot recognize the model, write down its brand.
 If you recognize flowers, indicate the name of the flower.
@@ -153,22 +157,31 @@ If possible, always indicate the model of the item and its manufacturer if this 
 answers should be short (one or two words, or the full name of the model).
 There is no need to describe the color of the item or its detailed characteristics. Just need name/model.
 Response format without words of clarification (without \"this, in the photo, here\" and so on) - just the name of the item or model\n"
+                                ],
+                                [
+                                    'type' => 'image_url',
+                                    'image_url' => [
+                                        'url' => $imageUrl,
+                                    ],
+                                ],
+                            ],
                         ],
-                        [
-                            "type" => "image_url",
-                            "image_url" => [
-                                "url" => "data:image/jpeg;base64," . base64_encode($image)
-                            ]
-                        ]
-                    ]
+                    ],
                 ],
-            ],
-        ]);
+            ]);
 
-        $apiResponse = json_decode($response->getBody(), true);
-        $recognizedObject = $apiResponse['choices'][0]['message']['content'] ?? 'Unknown object';
+            $recognizedObject = $apiResponse['choices'][0]['message']['content'] ?? 'Unknown object';
+            Storage::disk('public')->delete($imagePath);
+            $apiResponse = json_decode($response->getBody(), true);
+            $recognizedObject = $apiResponse['choices'][0]['message']['content'] ?? 'Unknown object';
 
-        return $recognizedObject;
+            return $recognizedObject;
+        } catch (\Exception $e) {
+            return response()->json([
+                'error' => 'Failed to recognize object',
+                'details' => $e->getMessage(),
+            ], 500);
+        }
     }
 
     public function chatMessage($message)
@@ -195,9 +208,7 @@ Response format without words of clarification (without \"this, in the photo, he
             $apiResponse = json_decode($response->getBody(), true);
             $recognizedResponse = $apiResponse['choices'][0]['message']['content'] ?? 'Unknown response';
 
-            return response()->json([
-                'result' => $recognizedResponse
-            ]);
+            return $recognizedResponse;
 
         } catch (\Exception $e) {
             return response()->json([
